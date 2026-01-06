@@ -1,0 +1,165 @@
+// Get DOM elements
+const inputPrompt = document.getElementById('inputPrompt');
+const enhancedPromptEl = document.getElementById('enhancedPrompt');
+const outputArea = document.getElementById('outputArea');
+const enhanceBtn = document.getElementById('enhanceBtn');
+const btnText = document.getElementById('btnText');
+const charCount = document.getElementById('charCount');
+const resetBtn = document.getElementById('resetBtn');
+const actionBtns = document.getElementById('actionBtns');
+const successMessage = document.getElementById('successMessage');
+const copyIcon = document.getElementById('copyIcon');
+
+// Update character count
+function updateCharCount() {
+    const count = inputPrompt.value.length;
+    charCount.textContent = `${count} characters`;
+    
+    // Show/hide reset button
+    if (count > 0) {
+        resetBtn.style.display = 'block';
+    } else {
+        resetBtn.style.display = 'none';
+    }
+}
+
+// Use example prompt
+function useExample(example) {
+    inputPrompt.value = example;
+    updateCharCount();
+    enhancedPromptEl.textContent = '';
+    enhancedPromptEl.style.display = 'none';
+    outputArea.querySelector('.empty-state').style.display = 'flex';
+    actionBtns.style.display = 'none';
+}
+
+// Reset everything
+function handleReset() {
+    inputPrompt.value = '';
+    enhancedPromptEl.textContent = '';
+    enhancedPromptEl.style.display = 'none';
+    outputArea.querySelector('.empty-state').style.display = 'flex';
+    updateCharCount();
+    actionBtns.style.display = 'none';
+    successMessage.style.display = 'none';
+}
+
+// Enhance prompt with AI
+async function enhancePrompt() {
+    const prompt = inputPrompt.value.trim();
+    
+    if (!prompt) {
+        return;
+    }
+    
+    // Show loading state
+    enhanceBtn.disabled = true;
+    btnText.textContent = 'Enhancing...';
+    const btnIcon = enhanceBtn.querySelector('.btn-icon');
+    btnIcon.classList.add('spinning');
+    
+    try {
+        const response = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                model: "claude-sonnet-4-20250514",
+                max_tokens: 1000,
+                messages: [
+                    {
+                        role: "user",
+                        content: `You are a prompt engineering expert. Transform the following generic prompt into a well-structured, effective prompt using this format:
+
+**Role**: Define a clear role/persona for the AI
+**Task**: Specify the exact task clearly
+**Context**: Provide relevant background information
+**Format**: Define the desired output format
+**Constraints**: Add any specific requirements or limitations
+**Examples** (if helpful): Provide examples when relevant
+
+Generic prompt: "${prompt}"
+
+Return ONLY the enhanced prompt in the above format, nothing else.`
+                    }
+                ],
+            })
+        });
+
+        const data = await response.json();
+        const enhanced = data.content
+            .filter(item => item.type === "text")
+            .map(item => item.text)
+            .join("\n");
+        
+        // Display result
+        enhancedPromptEl.textContent = enhanced;
+        enhancedPromptEl.style.display = 'block';
+        outputArea.querySelector('.empty-state').style.display = 'none';
+        actionBtns.style.display = 'flex';
+        
+    } catch (error) {
+        enhancedPromptEl.textContent = "Error enhancing prompt. Please try again.";
+        enhancedPromptEl.style.display = 'block';
+        outputArea.querySelector('.empty-state').style.display = 'none';
+        console.error('Error:', error);
+    } finally {
+        // Reset button state
+        enhanceBtn.disabled = false;
+        btnText.textContent = 'Enhance';
+        btnIcon.classList.remove('spinning');
+    }
+}
+
+// Copy to clipboard
+function copyToClipboard() {
+    const text = enhancedPromptEl.textContent;
+    
+    navigator.clipboard.writeText(text).then(() => {
+        // Show success message
+        successMessage.style.display = 'flex';
+        
+        // Change icon to checkmark
+        copyIcon.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+        `;
+        copyIcon.style.color = '#86efac';
+        
+        // Reset after 2 seconds
+        setTimeout(() => {
+            successMessage.style.display = 'none';
+            copyIcon.innerHTML = `
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            `;
+            copyIcon.style.color = '';
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+    });
+}
+
+// Download as text file
+function downloadPrompt() {
+    const text = enhancedPromptEl.textContent;
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'enhanced-prompt.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// Handle Enter key in textarea (Ctrl+Enter or Cmd+Enter to enhance)
+inputPrompt.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        enhancePrompt();
+    }
+});
